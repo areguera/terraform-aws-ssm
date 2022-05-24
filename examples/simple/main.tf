@@ -15,7 +15,7 @@ provider "aws" {
 # SSM Configuration
 # -------------------------------------------------------------------------------
 module "ssm" {
-  source = "../"
+  source = "../../"
 
   name = var.name
 

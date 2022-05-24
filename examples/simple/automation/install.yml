@@ -1,0 +1,12 @@
+- name: Examples simple - Install application
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  tasks:
+    - name: The httpd.service unit is up-and-running
+      ansible.builtin.dnf:
+        name: httpd.service
+        state: started
+        enabled: true
+

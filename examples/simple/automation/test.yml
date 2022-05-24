@@ -1,0 +1,8 @@
+---
+- name: Examples simple - Test application
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  tasks:
+    - ansible.builtin.ping:

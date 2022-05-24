@@ -30,6 +30,33 @@ resource "aws_iam_role" "this" {
   assume_role_policy = data.aws_iam_policy_document.this.json
 }
 
+resource "aws_iam_policy" "AmazonSSMS3ReadOnlyAccess" {
+  name = "AmazonSSMS3ReadOnlyAccess"
+  description = "Provides read only access to S3 bucket where SSM stores ansible playbooks)."
+
+  path = "/${var.name}/"
+
+  policy = jsonencode({
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:Get*",
+                "s3:List*",
+                "s3-object-lambda:Get*",
+                "s3-object-lambda:List*"
+            ],
+            "Resource": "${module.s3_bucket.s3_bucket_arn}"
+        }
+    ]
+  })
+}
+
+data "aws_iam_policy" "AmazonSSMS3ReadOnlyAccess" {
+  name = aws_iam_policy.AmazonSSMS3ReadOnlyAccess.name
+}
+
 resource "aws_iam_role_policy_attachment" "AmazonSSMManagedInstanceCore" {
   role       = aws_iam_role.this.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
@@ -37,6 +64,10 @@ resource "aws_iam_role_policy_attachment" "AmazonSSMManagedInstanceCore" {
 resource "aws_iam_role_policy_attachment" "AmazonSSMPatchAssociation" {
   role       = aws_iam_role.this.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMPatchAssociation"
+}
+resource "aws_iam_role_policy_attachment" "AmazonSSMS3ReadOnlyAccess" {
+  role       = aws_iam_role.this.name
+  policy_arn = data.aws_iam_policy.AmazonSSMS3ReadOnlyAccess.arn
 }
 
 resource "aws_iam_instance_profile" "this" {
@@ -53,12 +84,21 @@ module "s3_bucket" {
   source  = "terraform-aws-modules/s3-bucket/aws"
   version = "~> 3.0"
 
-  bucket = "${var.name}-ssm-logs"
+  bucket = "${var.name}-ssm"
   acl    = "private"
 
   versioning = {
     enabled = true
   }
+}
+
+resource "aws_s3_object" "automation" {
+  for_each = fileset(path.cwd, "automation/**")
+
+  bucket = module.s3_bucket.s3_bucket_id
+
+  key    = each.value
+  source = "${path.root}/${each.value}"
 }
 
 # ----------------------------------------------------------------------
@@ -103,7 +143,7 @@ resource "aws_ssm_association" "RunPatchBaseline" {
   max_concurrency     = 1000
   max_errors          = 1000
   compliance_severity = var.approved_patches_compliance_level
-  schedule_expression = "rate(1 days)"
+  schedule_expression = "rate(24 hours)"
 
   parameters = {
     Operation = "Scan"
@@ -234,8 +274,8 @@ resource "aws_ssm_maintenance_window_task" "this" {
 
   task_invocation_parameters {
     run_command_parameters {
-      output_s3_bucket     = "${var.name}-ssm-logs"
-      output_s3_key_prefix = "AWS-RunPatchBaseline"
+      output_s3_bucket     = module.s3_bucket.s3_bucket_id
+      output_s3_key_prefix = "logs/AWS-RunPatchBaseline"
       service_role_arn     = aws_iam_role.this.arn
       timeout_seconds      = 600
 
