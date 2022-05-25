@@ -117,8 +117,8 @@ resource "aws_ssm_association" "UpdateSSMAgent" {
 
   association_name    = "${var.name}-UpdateSSMAgent"
   schedule_expression = "rate(14 days)"
-  max_concurrency     = 1000
-  max_errors          = 1000
+  max_concurrency     = var.max_concurrency
+  max_errors          = var.max_errors
   compliance_severity = var.approved_patches_compliance_level
 
   parameters = {
@@ -138,8 +138,8 @@ resource "aws_ssm_association" "RunPatchBaseline" {
   name = "AWS-RunPatchBaseline"
 
   association_name    = "${var.name}-RunPatchBaseline"
-  max_concurrency     = 1000
-  max_errors          = 1000
+  max_concurrency     = var.max_concurrency
+  max_errors          = var.max_errors
   compliance_severity = var.approved_patches_compliance_level
   schedule_expression = "rate(24 hours)"
 
@@ -243,8 +243,8 @@ resource "aws_ssm_maintenance_window_target" "this" {
 }
 
 resource "aws_ssm_maintenance_window_task" "this" {
-  max_concurrency = lookup(var.maintenance_window_task, "max_concurrency")
-  max_errors      = lookup(var.maintenance_window_task, "max_errors")
+  max_concurrency = var.max_concurrency
+  max_errors      = var.max_errors
   priority        = 1
   task_arn        = "AWS-RunPatchBaseline"
   task_type       = "RUN_COMMAND"

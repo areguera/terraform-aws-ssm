@@ -41,11 +41,6 @@ module "ssm" {
     cutoff            = 0
     duration          = 1
   }
-
-  maintenance_window_task = {
-    max_concurrency = 2
-    max_errors      = 1
-  }
 }
 
 # -------------------------------------------------------------------------------
