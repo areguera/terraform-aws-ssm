@@ -16,6 +16,8 @@ maintenance window time frame.
     ---7---|---7---|---7---|---7---|---7---|---7---|---7---|---7---|
            |       |       |       |       |       |       |       |
 dev ======>|======>|======>|======>|======>|======>|======>|======>|
+           |       |       |       |       |       |       |       |
+    -------|-------|-------|-------|-------|-------|-------|-------|
 ```
 
 To reduce the downtime impact produced by reboot actions on the environment,
@@ -28,11 +30,10 @@ their work. When a failure occurs, the maintenance window must be manually
 deactivated to prevent later executions while still investigating and fixing
 the failure.
 
-Once the problem is identified, and fixed, the maintenance window that failed
-in first place must be executed manually to reapply the same patches that
-failed previously. If this second execution passes successfully, then the
-maintenance window can be enabled again for automatic execution later on the
-remaining instances.
+Once the problem has been identified, and fixed, the maintenance window must be
+executed manually to reapply that specific software patching again. If this
+manual execution passes successfully, then the maintenance window can be
+enabled again for automatic execution in the future.
 
 Applying actions in a limited number of EC2 instances is not enough to reduce
 the possibility of downtime because an application failure. It exists the

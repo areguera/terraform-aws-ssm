@@ -23,18 +23,14 @@ data "aws_iam_policy_document" "this" {
   }
 }
 
-resource "aws_iam_role" "this" {
-  name = "${var.name}-ssm-managed-instance"
-
-  path               = "/${var.name}/"
-  assume_role_policy = data.aws_iam_policy_document.this.json
+data "aws_iam_policy" "AmazonSSMS3ReadOnlyAccess" {
+  name = aws_iam_policy.AmazonSSMS3ReadOnlyAccess.name
 }
 
 resource "aws_iam_policy" "AmazonSSMS3ReadOnlyAccess" {
-  name = "AmazonSSMS3ReadOnlyAccess"
-  description = "Provides read only access to S3 bucket where SSM stores ansible playbooks)."
-
-  path = "/${var.name}/"
+  name        = "AmazonSSMS3ReadOnlyAccess"
+  description = "Provides read only access to S3 bucket where SSM stores automation playbooks)."
+  path        = "/${var.name}/"
 
   policy = jsonencode({
     "Version": "2012-10-17",
@@ -53,8 +49,11 @@ resource "aws_iam_policy" "AmazonSSMS3ReadOnlyAccess" {
   })
 }
 
-data "aws_iam_policy" "AmazonSSMS3ReadOnlyAccess" {
-  name = aws_iam_policy.AmazonSSMS3ReadOnlyAccess.name
+resource "aws_iam_role" "this" {
+  name = "${var.name}-ssm-managed-instance"
+  path = "/${var.name}/"
+
+  assume_role_policy = data.aws_iam_policy_document.this.json
 }
 
 resource "aws_iam_role_policy_attachment" "AmazonSSMManagedInstanceCore" {
@@ -96,7 +95,6 @@ resource "aws_s3_object" "automation" {
   for_each = fileset(path.cwd, "automation/**")
 
   bucket = module.s3_bucket.s3_bucket_id
-
   key    = each.value
   source = "${path.root}/${each.value}"
 }
@@ -171,21 +169,6 @@ resource "aws_ssm_association" "GatherSoftwareInventory" {
       key = targets.value["key"]
       values = targets.value["values"]
     }
-  }
-}
-
-# ----------------------------------------------------------------------
-# SSM Resource Groups
-# ----------------------------------------------------------------------
-resource "aws_resourcegroups_group" "this" {
-  name        = var.name
-  description = "Resource group to gather instances related to ${var.name}."
-
-  resource_query {
-    query = jsonencode({
-      "ResourceTypeFilters" : ["AWS::EC2::Instance"],
-      "TagFilters" : [{ "Key" : "Patch Group", "Values" : [var.name] }]
-    })
   }
 }
 
