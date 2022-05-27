@@ -161,19 +161,25 @@ resource "aws_s3_object" "this" {
 # ------------------------------------------------------------------------------
 # SSM Documents
 # ------------------------------------------------------------------------------
-# NOTE: AWS-RunAnsiblePlaybook allows to execute a single playbook file from an
-# s3:// location but not from a directory structure. AWS is deprecating it and
-# doesn't recomend using it. Instead, the recommendatio is to use
+# NOTE: The AWS-RunAnsiblePlaybook document allows to execute a single playbook
+# file from an s3:// location but not from a directory structure. AWS is
+# deprecating it and doesn't recomend using it. Instead, the recommendation is
+# to use AWS-ApplyAnsiblePlaybooks.
 #
-# NOTE: AWS-ApplyAnsiblePlaybook, which allow to execute playbooks from a
-# directory structure download from a public s3 bucket. It doesn't support
-# s3://. Neither option fit our need, so we've cloned AWS-ApplyAnsiblePlaybook
-# into `${var.name}-ApplyAnsiblePlaybook' document.
+# NOTE: The AWS-ApplyAnsiblePlaybooks document allows to execute playbooks from
+# a directory structure which is previously downloaded from a public s3 bucket
+# to the EC2 instance where ssm-agent is running. This document doesn't support
+# s3://.
 #
-# The `${var.name}-ApplyAnsiblePlaybook' is intended to run regularly, as SSM
-# association, to keep the application configuration in compliance. It is also
-# used in Maintenance windows to check the application is working as expected
-# after automatic patching task.
+# Neither options fit our need. So we've cloned AWS-ApplyAnsiblePlaybooks
+# document into `${var.name}-ApplyAnsiblePlaybooks' document and introduced
+# changes to fit our needs related to ansible playbooks execution.
+#
+# The `${var.name}-ApplyAnsiblePlaybooks' is intended to run regularly, as SSM
+# association, to keep our hypothetical application configuration we are
+# running in the EC2 instance in compliance with whatever rules specified in
+# the configuration playbook. It is also used by SSM Maintenance Windows to
+# check that everything is working as expected after automatic patching task.
 resource "aws_ssm_document" "ApplyAnsiblePlaybooks" {
   name            = "${var.name}-ApplyAnsiblePlaybooks"
   document_format = "JSON"
