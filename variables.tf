@@ -55,7 +55,7 @@ variable "approval_rules" {
 
 variable "maintenance_window" {
   description = "(Required)"
-  type        = object({
+  type = object({
     schedule          = string
     schedule_timezone = string
     cutoff            = number

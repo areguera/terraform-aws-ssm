@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "2.2",
+  "description": "Use this document to run Ansible Playbooks on Systems Manager managed instances. It allows you to run one single playbook when you provide a file or many playbooks when you provide a directory. Content must be stored in s3 buckets and specified using a private url (e.g., starting with s3://).",
+  "parameters": {
+    "SourceInfo": {
+      "description": "(Required) Specify the remote playbook file (e.g., 's3://${name}-ssm/00-application-configuration.yml') or directory (e.g., 's3://${name}-ssm/playbooks/') you want to execute. Important: the IAM instance profile on your managed instances must be configured with read access to Amazon S3. Important: When you enter a directory, all the yml/yaml files inside it will be process one by one in alphabetic order.",
+      "type": "String",
+      "displayType": "textfield",
+      "allowedPattern": "^s3://([(a-z_A-Z0-9\\-\\.)\/]+(.yml|.yaml)|[(a-z_A-Z0-9\\-\\.)\/]+\/)$",
+      "default": "s3://${name}-ssm/playbooks/"
+    },
+    "ExtraVariables": {
+      "type": "String",
+      "description": "(Optional) Additional variables to pass to Ansible at runtime. Enter key/value pairs separated by a space. For example: color=red flavor=cherry",
+      "default": "SSM=True",
+      "displayType": "textarea",
+      "allowedPattern": "^$|^\\w+\\=(([^\\s|:();&]+)|('[^|:();&]+'))(\\s+\\w+\\=(([^\\s|:();&]+)|('[^|:();&]+')))*$"
+    },
+    "Check": {
+      "type": "String",
+      "description": "(Optional) Use this parameter to run a check of the Ansible execution. The system doesn’t make any changes to your systems. Instead, any module that supports check mode reports the changes it would make rather than making them. Modules that don’t support check mode take no action and don’t report changes that would be made.",
+      "allowedValues": [
+        "True",
+        "False"
+      ],
+      "default": "False"
+    },
+    "Verbose": {
+      "type": "String",
+      "description": "(Optional) Set the verbosity level for logging Playbook executions. Specify -v for low verbosity, -vv or –vvv for medium verbosity, and -vvvv for debug level.",
+      "allowedValues": [
+        "-v",
+        "-vv",
+        "-vvv",
+        "-vvvv"
+      ],
+      "default": "-v"
+    },
+    "TimeoutSeconds": {
+      "type": "String",
+      "description": "(Optional) The time in seconds for a command to be completed before it is considered to have failed.",
+      "default": "3600"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "downloadContent",
+      "inputs": {
+        "timeoutSeconds": "{{ TimeoutSeconds }}",
+        "runCommand": [
+          "#!/bin/bash",
+          "if [[ \"{{SourceInfo}}\" =~ (.yml|.yaml)$ ]] ; then",
+          "   aws s3 cp \"{{SourceInfo}}\" \"main.yml\"",
+          "elif [[ \"{{SourceInfo}}\" =~ /$ ]] ; then",
+          "   aws s3 sync --delete \"{{SourceInfo}}\" \"./playbooks/\"",
+          "else",
+          "     echo \"The SourceInfo ({{SourceInfo}}) specified doesn't match its naming pattern. You can review the log files to help you correct the problem.\" >&2",
+          "     exit 1",
+          "fi"
+        ]
+      }
+    },
+    {
+      "action": "aws:runShellScript",
+      "name": "runShellScript",
+      "inputs": {
+        "timeoutSeconds": "{{ TimeoutSeconds }}",
+        "runCommand": [
+          "#!/bin/bash",
+          " ",
+          "runAnsiblePlaybook() {",
+          "   local PLAYBOOK=$${1:-main.yml}",
+          "   if [ ! -f  \"$${PLAYBOOK}\" ] ; then",
+          "       echo \"The specified Playbook file doesn't exist in the downloaded bundle. Please review the specified path.\" >&2",
+          "       exit 2",
+          "   fi",
+          "   if  [[ \"{{Check}}\" == True ]] ; then",
+          "       ansible-playbook -i \"localhost,\" --check -c local -e \"{{ExtraVariables}}\" \"{{Verbose}}\" \"$${PLAYBOOK}\"",
+          "   else",
+          "       ansible-playbook -i \"localhost,\" -c local -e \"{{ExtraVariables}}\" \"{{Verbose}}\" \"$${PLAYBOOK}\"",
+          "   fi",
+          "}",
+          " ",
+          "if [ -f  \"/etc/system-release\" ] ; then",
+          "   if ( cat /etc/system-release | grep -i 'Amazon Linux release 2' ) ; then ",
+          "       sudo amazon-linux-extras install ansible2 -y",
+          "   else",
+          "       echo \"There was a problem installing or updating the required tools for the document. You can review the log files to help you correct the problem.\" >&2",
+          "       exit 1",
+          "   fi",
+          "else",
+          "   echo \"There was a problem installing or updating the required tools for the document. You can review the log files to help you correct the problem.\" >&2",
+          "   exit 1",
+          "fi",
+          " ",
+          "if [[ \"{{SourceInfo}}\" =~ (.yml|.yaml)$ ]] ; then",
+          "   runAnsiblePlaybook",
+          "elif [[ \"{{SourceInfo}}\" =~ /$ ]] ; then",
+          "   for playbook in $(find ./playbooks/ -regextype egrep -regex '.+.(yml|yaml)$' | sort); do",
+          "     runAnsiblePlaybook \"$${playbook}\"",
+          "   done",
+          "fi"
+        ]
+      }
+    }
+  ]
+}
+
