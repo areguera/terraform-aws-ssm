@@ -36,7 +36,7 @@ module "ssm" {
 
   maintenance_window = {
     enabled           = true
-    schedule          = "rate(10 minutes)"
+    schedule          = "rate(5 days)"
     schedule_timezone = "UTC"
     cutoff            = 0
     duration          = 1

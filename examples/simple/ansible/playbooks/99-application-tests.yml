@@ -1,0 +1,7 @@
+---
+- name: Examples simple - Test application
+  hosts: localhost
+  connection: local
+
+  roles:
+    - application-httpd-tests

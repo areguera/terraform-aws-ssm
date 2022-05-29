@@ -1,0 +1,7 @@
+---
+- name: The httpd.service returns the expected message
+  ansible.builtin.uri:
+    url: http://localhost/
+    return_content: yes
+  register: this
+  failed_when: "'Hello, World!' not in this.content"

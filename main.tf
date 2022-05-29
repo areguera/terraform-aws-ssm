@@ -44,7 +44,7 @@ resource "aws_iam_policy" "AmazonEC2SSMS3Logs" {
 
 resource "aws_iam_policy" "AmazonEC2SSMS3Playbooks" {
   name        = "AmazonEC2SSMS3Playbooks"
-  description = "Allow EC2 instances to read from ${var.name}-ssm/playbooks/ S3 bucket path."
+  description = "Allow EC2 instances to read from ${var.name}-ssm/ansible/ S3 bucket path."
   path        = "/${var.name}/"
 
   policy = jsonencode({
@@ -55,7 +55,7 @@ resource "aws_iam_policy" "AmazonEC2SSMS3Playbooks" {
         "Action" : [
           "s3:GetObject",
         ],
-        "Resource" : "${module.s3_bucket.s3_bucket_arn}/playbooks/*"
+        "Resource" : "${module.s3_bucket.s3_bucket_arn}/ansible/*"
       },
       {
         "Effect" : "Allow",
@@ -150,7 +150,7 @@ module "s3_bucket" {
 }
 
 resource "aws_s3_object" "this" {
-  for_each = fileset(path.root, "playbooks/**")
+  for_each = fileset(path.root, "ansible/**")
 
   bucket = module.s3_bucket.s3_bucket_id
   key    = each.value
@@ -185,7 +185,7 @@ resource "aws_ssm_document" "ApplyAnsiblePlaybooks" {
   document_format = "JSON"
   document_type   = "Command"
 
-  content = templatefile("${path.root}/documents/ApplyAnsiblePlaybooks.json", { "name" = var.name })
+  content = templatefile("${path.module}/documents/ApplyAnsiblePlaybooks.json", { "name" = var.name })
 }
 
 # ------------------------------------------------------------------------------
@@ -292,7 +292,7 @@ resource "aws_ssm_association" "ApplyAnsiblePlaybooks" {
   }
 
   parameters = {
-    SourceInfo = "s3://${var.name}-ssm/playbooks/00-application-configuration.yml"
+    SourceInfo = "s3://${var.name}-ssm/ansible/"
   }
 
   output_location {
@@ -467,8 +467,8 @@ resource "aws_ssm_maintenance_window_task" "ApplyAnsiblePlaybooks" {
       timeout_seconds      = 600
 
       parameter {
-        name   = "playbookurl"
-        values = ["s3://${var.name}-ssm/playbooks/"]
+        name   = "SourceInfo"
+        values = ["s3://${var.name}-ssm/ansible/"]
       }
     }
   }

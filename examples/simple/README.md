@@ -1,15 +1,19 @@
-# Single environment configuration
+# Composing SSM configuration for one simple environment
 
-This example describes the implementation of a single environment of EC2
-instances configured to receive automatic patching through AWS Systems Manager
-(SSM) capabilities.
+Let's consider an hypothetical environment `dev` which provides compute power
+for developers do their work. We want this environment to apply system updates
+automatically every 7 days for all type of packages released by the package
+provider, including those related to non-security updates. In case some of
+these packages need a reboot, the reboot will take place during the off work
+hours.
 
-The environment name is `dev` and provides compute power for developers do
-their work. It has been configured to apply system updates automatically every
-7 days. The auto-approved update action considers all type of packages released
-by the package provider, including those related to non-security updates. In
-case some of these packages need a reboot, the reboot will during the specified
-maintenance window time frame.
+The developers are working on an application which sole purpose is to print the
+`Hello, World!` message on the web browser, when they request the
+`http://localhost/` URL in the workstation. For this purpose, developers need
+an EC2 instance with a (httpd) web server permanently running, and configured
+to serve the file `index.html`. Note that, for this example, instances must
+deployed from a pristine image and the web server needs to be installed and
+configured every time a new EC2 instance is deployed for a developer.
 
 ```
            *       *       *       *       *       *       *       *
@@ -50,3 +54,23 @@ run after the software patching document.
 So far the environment able to receive automatic software patching with a
 failure rate of 10% of its capacity. To provide automatic software patching
 with less failure rate, implement a multi-environment configuration.
+
+## The Infrastructure
+
+In order to illustrate SSM configuration the `terraform-aws-ssm` module
+provides, this example deploys an auto-scaling group (ASG) to control the
+number of EC2 instances the environment will have. By default, the ASG uses a
+pristine Amazon Linux 2 image and only one instance is deployed. With this
+infrastructure in place, the SSM configuration keeps the EC2 instances software
+patching up-to-date and applies regular actions on to grantee the application
+running inside all the EC2 instances is healthy, both during operation and
+after new patches has been applied.
+
+## The Application
+
+The application running on EC2 instances is an httpd web server, which only
+output is the string `Hello, World!`. Since the ASG is using pristine AMI, the
+httpd package is not installed, nor configured. This is intentional to
+illustrate how we can use SSM associations to run regular configuration
+actions, and SSM Maintenance Window to test our application after automatic
+patching.
