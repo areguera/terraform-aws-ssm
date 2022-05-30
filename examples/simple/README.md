@@ -1,76 +1,93 @@
-# Composing SSM configuration for one simple environment
+# Composing SSM configuration for a simple environment
 
-Let's consider an hypothetical environment `dev` which provides compute power
-for developers do their work. We want this environment to apply system updates
-automatically every 7 days for all type of packages released by the package
-provider, including those related to non-security updates. In case some of
-these packages need a reboot, the reboot will take place during the off work
-hours.
+The SSM configuration does nothing on its own. To see it in action you need to
+create EC2 instances and tag them with the special tag `Patch Group`. This
+article describes how to use the `terraform-aws-ssm` module to implement the
+SSM configuration of a simple environment of EC2 instances controlled by an
+auto-scaling group configured to use a pristine Amazon Linux 2 image in the
+launch template.
 
-The developers are working on an application which sole purpose is to print the
-`Hello, World!` message on the web browser, when they request the
-`http://localhost/` URL in the workstation. For this purpose, developers need
-an EC2 instance with a (httpd) web server permanently running, and configured
-to serve the file `index.html`. Note that, for this example, instances must
-deployed from a pristine image and the web server needs to be installed and
-configured every time a new EC2 instance is deployed for a developer.
+The SSM configuration this article describes will allow you to automatically do
+the following:
+
+- Install, and configure EC2 instances to reach the desired state applying
+  Ansible playbooks, when they are deployed for first time.
+
+- Keep EC2 instances already deployed in the desired state, applying Ansible
+  playbooks regularly, every 30 minutes.
+
+- Keep the deployed EC2 instances operating system up-to-date, by applying
+  system packages regularly, every 7 days.
+
+- Keep EC2 instances desired state after system patching, applying Ansible
+  playbooks, to validate the application running on the instances works as
+  expected.
+
+## Desired State
+
+The desired state responds to the environment purpose (i.e., what we are
+creating the environment for). In this example, to be in compliance with
+the desired state means that, EC2 instances must be installed and configured in
+a consistent way to allow their users to run an HTTP request to
+`http://localhost` and receive the response `Hello, World!`.
+
+## Patching Baseline
+
+The EC2 instances must apply system updates, if any, for all type of packages
+the operating system provider (i.e., for Amazon Linux 2 images, Amazon in this
+case) released, including those related to non-security updates.
+
+## Maintenance Window
+
+The SSM configuration in this example creates only one Maintenance Window with
+two tasks inside. One for patching and other for testing the application
+running in the EC2 instances.
 
 ```
-           *       *       *       *       *       *       *       *
-    ---7---|---7---|---7---|---7---|---7---|---7---|---7---|---7---|
-           |       |       |       |       |       |       |       |
-dev ======>|======>|======>|======>|======>|======>|======>|======>|
-           |       |       |       |       |       |       |       |
-    -------|-------|-------|-------|-------|-------|-------|-------|
+           *       *       *       *       *       *       *
+    ---7---|---7---|---7---|---7---|---7---|---7---|---7---|...
+           |       |       |       |       |       |       |
+dev ======>|======>|======>|======>|======>|======>|======>|...
+           |       |       |       |       |       |       |
+    -------|-------|-------|-------|-------|-------|-------|...
 ```
 
-To reduce the downtime impact produced by reboot actions on the environment,
-the maintenance windows runs out of work hours and the concurrency of actions
-is limited to 10% of the total number of EC2 instances registered in the patch
-group configured in SSM. This way, in case of a failure that makes them not to
-boot, only the 10% of instances may be out-of-service. That would provide time
-to investigate what happened, while the other 90% of developers can continue
-their work. When a failure occurs, the maintenance window must be manually
-deactivated to prevent later executions while still investigating and fixing
-the failure.
+By default `terraform-aws-ssm` module schedules the maintenance window
+recurrency to run _every 7 days at 09:00 UTC_ (`cron(0 6 */7 * ?)`). To se
+other possible time values, see [Reference: Cron and rate expressions for
+Systems
+Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/reference-cron-and-rate-expressions.html).
 
-Once the problem has been identified, and fixed, the maintenance window must be
-executed manually to reapply that specific software patching again. If this
-manual execution passes successfully, then the maintenance window can be
-enabled again for automatic execution in the future.
+By default `terraform-aws-ssm` module sets the concurrency of actions triggered
+by the maintenance window to _10%_ of the total number of EC2 instances
+registered in the patch group configured in SSM. Only that 10% of instances may
+be affected in case of failures related to software patching. The concurrency
+configuration in combination with the recurrence configuration allow to
+investigate what happened in the failed instances, while the other _90%_ of
+developers can continue their work.
 
-Applying actions in a limited number of EC2 instances is not enough to reduce
-the possibility of downtime because an application failure. It exists the
-remote possibility of inconsistencies between the application we are running
-and the new software introduced by automatic patching. In these cases, it is
-also necessary to provide automated tests in the maintenance window to validate
-the application works correctly once the software patches recently applied.
+When the recurrence configured in the maintenance window doesn't provide
+enough time to solve the issue, the maintenance windows must be manually
+disabled to prevent later executions while still investigating and fixing the
+failure. Once the problem is identified, and fixed, the maintenance window that
+failed must be executed manually to reapply that specific software patching
+again on the affected instances. When this manual execution passes
+successfully, then the maintenance window can be enabled again for automatic
+execution in the future.
 
-For automated tests, this example uses an run-command document to make a local
-HTTP request to the instance IP address, and expect a "Hello World!" message as
-response. This run-command document is configured in the maintenance window to
-run after the software patching document.
+## Associations (granting the desired state)
 
-So far the environment able to receive automatic software patching with a
-failure rate of 10% of its capacity. To provide automatic software patching
-with less failure rate, implement a multi-environment configuration.
+Configuring the SSM Maintenance Window to run in a limited number of EC2
+instances helps to protect some EC2 instances from failures introduced during
+system patching, but, in case of a failure, it doesn't protect that reduced
+number of instances. In these cases, SSM Associations are a convenient way to
+run automated tests regularly on all EC2 instances (e.g., during work hours,
+during off-work hours, and after applying patching to monitor the application
+works correctly in both scenarios.)
 
-## The Infrastructure
-
-In order to illustrate SSM configuration the `terraform-aws-ssm` module
-provides, this example deploys an auto-scaling group (ASG) to control the
-number of EC2 instances the environment will have. By default, the ASG uses a
-pristine Amazon Linux 2 image and only one instance is deployed. With this
-infrastructure in place, the SSM configuration keeps the EC2 instances software
-patching up-to-date and applies regular actions on to grantee the application
-running inside all the EC2 instances is healthy, both during operation and
-after new patches has been applied.
-
-## The Application
-
-The application running on EC2 instances is an httpd web server, which only
-output is the string `Hello, World!`. Since the ASG is using pristine AMI, the
-httpd package is not installed, nor configured. This is intentional to
-illustrate how we can use SSM associations to run regular configuration
-actions, and SSM Maintenance Window to test our application after automatic
-patching.
+SSM Associations allows us to grant the desired state in the target EC2
+instances by running SSM Documents on the target EC2 instance. In this example,
+the SSM configuration uses the `document/ApplyAnsiblePlaybooks.json` file, an
+SSM document written to run all the Ansible playbooks in the `ansible/`
+directory, one by one, in alphabetic order. These playbooks are the
+application's source of truth, the definition of its desired state.
