@@ -371,41 +371,10 @@ resource "aws_ssm_maintenance_window_target" "this" {
   }
 }
 
-resource "aws_ssm_maintenance_window_task" "SystemPackages" {
-  name        = "SystemPackages"
-  description = "Install required packages on the operating system (e.g., ansible)."
-  priority    = 1
-
-  max_concurrency = var.max_concurrency
-  max_errors      = var.max_errors
-  task_arn        = "AWS-RunShellScript"
-  task_type       = "RUN_COMMAND"
-  window_id       = aws_ssm_maintenance_window.this.id
-
-  targets {
-    key    = "WindowTargetIds"
-    values = [aws_ssm_maintenance_window_target.this.id]
-  }
-
-  task_invocation_parameters {
-    run_command_parameters {
-      output_s3_bucket     = module.s3_bucket.s3_bucket_id
-      output_s3_key_prefix = "logs/AWS-RunShellScript"
-      service_role_arn     = aws_iam_role.this.arn
-      timeout_seconds      = 600
-
-      parameter {
-        name   = "commands"
-        values = ["amazon-linux-extras install -y ansible2"]
-      }
-    }
-  }
-}
-
 resource "aws_ssm_maintenance_window_task" "SystemPatches" {
   name        = "SystemPatches"
   description = "Run system patching on patch group instances using the patch baseline configured."
-  priority    = 2
+  priority    = 10
 
   max_concurrency = var.max_concurrency
   max_errors      = var.max_errors
@@ -446,7 +415,7 @@ resource "aws_ssm_maintenance_window_task" "SystemPatches" {
 resource "aws_ssm_maintenance_window_task" "ApplyAnsiblePlaybooks" {
   name        = "ApplyAnsiblePlaybooks"
   description = "Apply configuration and automated tests on application to validate that it is working as expected after patching."
-  priority    = 3
+  priority    = 20
 
   max_concurrency = var.max_concurrency
   max_errors      = var.max_errors
