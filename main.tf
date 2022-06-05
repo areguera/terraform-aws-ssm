@@ -9,9 +9,9 @@ terraform {
 
 data "aws_region" "current" {}
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # IAM
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 data "aws_iam_policy_document" "this" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -23,10 +23,77 @@ data "aws_iam_policy_document" "this" {
   }
 }
 
+resource "aws_iam_policy" "AmazonEC2SSMS3Logs" {
+  name        = "AmazonEC2SSMS3Logs"
+  description = "Allow EC2 instances to write to ${var.name}-ssm/logs/ S3 bucket path."
+  path        = "/${var.name}/"
+
+  policy = jsonencode({
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Effect" : "Allow",
+        "Action" : [
+          "s3:PutObject"
+        ],
+        "Resource" : "${module.s3_bucket.s3_bucket_arn}/logs/*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "AmazonEC2SSMS3Playbooks" {
+  name        = "AmazonEC2SSMS3Playbooks"
+  description = "Allow EC2 instances to read from ${var.name}-ssm/ansible/ S3 bucket path."
+  path        = "/${var.name}/"
+
+  policy = jsonencode({
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Effect" : "Allow",
+        "Action" : [
+          "s3:GetObject",
+        ],
+        "Resource" : "${module.s3_bucket.s3_bucket_arn}/ansible/*"
+      },
+      {
+        "Effect" : "Allow",
+        "Action" : [
+          "s3:ListBucket",
+        ],
+        "Resource" : "${module.s3_bucket.s3_bucket_arn}"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "AmazonEC2SSMCloudwatch" {
+  name        = "AmazonEC2SSMCloudwatch"
+  description = "Allow EC2 instances to interact with ${var.name}-ssm cloudwatch group."
+  path        = "/${var.name}/"
+
+  policy = jsonencode({
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Effect" : "Allow",
+        "Action" : [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:DescribeLogStreams",
+          "logs:PutLogEvents"
+        ],
+        "Resource" : "${aws_cloudwatch_log_group.this.arn}:*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role" "this" {
   name = "${var.name}-ssm-managed-instance"
+  path = "/${var.name}/"
 
-  path               = "/${var.name}/"
   assume_role_policy = data.aws_iam_policy_document.this.json
 }
 
@@ -38,6 +105,18 @@ resource "aws_iam_role_policy_attachment" "AmazonSSMPatchAssociation" {
   role       = aws_iam_role.this.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMPatchAssociation"
 }
+resource "aws_iam_role_policy_attachment" "AmazonEC2SSMS3Logs" {
+  role       = aws_iam_role.this.name
+  policy_arn = aws_iam_policy.AmazonEC2SSMS3Logs.arn
+}
+resource "aws_iam_role_policy_attachment" "AmazonEC2SSMS3Playbooks" {
+  role       = aws_iam_role.this.name
+  policy_arn = aws_iam_policy.AmazonEC2SSMS3Playbooks.arn
+}
+resource "aws_iam_role_policy_attachment" "AmazonEC2SSMCloudwatch" {
+  role       = aws_iam_role.this.name
+  policy_arn = aws_iam_policy.AmazonEC2SSMCloudwatch.arn
+}
 
 resource "aws_iam_instance_profile" "this" {
   name = "${var.name}-ssm-managed-instance-profile"
@@ -47,23 +126,71 @@ resource "aws_iam_instance_profile" "this" {
 }
 
 # ----------------------------------------------------------------------
-# S3
+# Cloudwatch
 # ----------------------------------------------------------------------
+resource "aws_cloudwatch_log_group" "this" {
+  name = "${var.name}-ssm"
+}
+
+# ------------------------------------------------------------------------------
+# S3
+# ------------------------------------------------------------------------------
 module "s3_bucket" {
   source  = "terraform-aws-modules/s3-bucket/aws"
   version = "~> 3.0"
 
-  bucket = "${var.name}-ssm-logs"
+  bucket = "${var.name}-ssm"
   acl    = "private"
 
   versioning = {
     enabled = true
   }
+
+  force_destroy = true
 }
 
-# ----------------------------------------------------------------------
+resource "aws_s3_object" "this" {
+  for_each = fileset(path.root, "ansible/**")
+
+  bucket = module.s3_bucket.s3_bucket_id
+  key    = each.value
+  source = "${path.root}/${each.value}"
+  etag   = filemd5("${path.root}/${each.value}")
+}
+
+# ------------------------------------------------------------------------------
+# SSM Documents
+# ------------------------------------------------------------------------------
+# NOTE: The AWS-RunAnsiblePlaybook document allows to execute a single playbook
+# file from an s3:// location but not from a directory structure. AWS is
+# deprecating it and doesn't recomend using it. Instead, the recommendation is
+# to use AWS-ApplyAnsiblePlaybooks.
+#
+# NOTE: The AWS-ApplyAnsiblePlaybooks document allows to execute playbooks from
+# a directory structure which is previously downloaded from a public s3 bucket
+# to the EC2 instance where ssm-agent is running. This document doesn't support
+# s3://.
+#
+# Neither options fit our need. So we've cloned AWS-ApplyAnsiblePlaybooks
+# document into `${var.name}-ApplyAnsiblePlaybooks' document and introduced
+# changes to fit our needs related to ansible playbooks execution.
+#
+# The `${var.name}-ApplyAnsiblePlaybooks' is intended to run regularly, as SSM
+# association, to keep our hypothetical application configuration we are
+# running in the EC2 instance in compliance with whatever rules specified in
+# the configuration playbook. It is also used by SSM Maintenance Windows to
+# check that everything is working as expected after automatic patching task.
+resource "aws_ssm_document" "ApplyAnsiblePlaybooks" {
+  name            = "${var.name}-ApplyAnsiblePlaybooks"
+  document_format = "JSON"
+  document_type   = "Command"
+
+  content = templatefile("${path.module}/documents/ApplyAnsiblePlaybooks.json", { "name" = var.name })
+}
+
+# ------------------------------------------------------------------------------
 # SSM Associations
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 locals {
   # Define targets of the SSM association. AWS currently supports a maximum of
   # 5 targets. By default, and for consistency, we are using `tag:Patch Group`
@@ -79,8 +206,8 @@ resource "aws_ssm_association" "UpdateSSMAgent" {
 
   association_name    = "${var.name}-UpdateSSMAgent"
   schedule_expression = "rate(14 days)"
-  max_concurrency     = 1000
-  max_errors          = 1000
+  max_concurrency     = var.max_concurrency
+  max_errors          = var.max_errors
   compliance_severity = var.approved_patches_compliance_level
 
   parameters = {
@@ -94,16 +221,21 @@ resource "aws_ssm_association" "UpdateSSMAgent" {
       values = lookup(targets.value, "values")
     }
   }
+
+  output_location {
+    s3_bucket_name = module.s3_bucket.s3_bucket_id
+    s3_key_prefix  = "logs/AWS-UpdateSSMAgent"
+  }
 }
 
 resource "aws_ssm_association" "RunPatchBaseline" {
   name = "AWS-RunPatchBaseline"
 
   association_name    = "${var.name}-RunPatchBaseline"
-  max_concurrency     = 1000
-  max_errors          = 1000
+  max_concurrency     = var.max_concurrency
+  max_errors          = var.max_errors
   compliance_severity = var.approved_patches_compliance_level
-  schedule_expression = "rate(1 days)"
+  schedule_expression = "rate(24 hours)"
 
   parameters = {
     Operation = "Scan"
@@ -115,6 +247,11 @@ resource "aws_ssm_association" "RunPatchBaseline" {
       key    = lookup(targets.value, "key")
       values = lookup(targets.value, "values")
     }
+  }
+
+  output_location {
+    s3_bucket_name = module.s3_bucket.s3_bucket_id
+    s3_key_prefix  = "logs/AWS-RunPatchBaseline"
   }
 }
 
@@ -128,30 +265,45 @@ resource "aws_ssm_association" "GatherSoftwareInventory" {
   dynamic "targets" {
     for_each = local.association_targets
     content {
-      key = targets.value["key"]
+      key    = targets.value["key"]
       values = targets.value["values"]
     }
   }
-}
 
-# ----------------------------------------------------------------------
-# SSM Resource Groups
-# ----------------------------------------------------------------------
-resource "aws_resourcegroups_group" "this" {
-  name        = var.name
-  description = "Resource group to gather instances related to ${var.name}."
-
-  resource_query {
-    query = jsonencode({
-      "ResourceTypeFilters" : ["AWS::EC2::Instance"],
-      "TagFilters" : [{ "Key" : "Patch Group", "Values" : [var.name] }]
-    })
+  output_location {
+    s3_bucket_name = module.s3_bucket.s3_bucket_id
+    s3_key_prefix  = "logs/AWS-GatherSoftwareInventory"
   }
 }
 
-# ----------------------------------------------------------------------
+resource "aws_ssm_association" "ApplyAnsiblePlaybooks" {
+  name = aws_ssm_document.ApplyAnsiblePlaybooks.name
+
+  association_name    = aws_ssm_document.ApplyAnsiblePlaybooks.name
+  schedule_expression = "rate(30 minutes)"
+  compliance_severity = var.approved_patches_compliance_level
+
+  dynamic "targets" {
+    for_each = local.association_targets
+    content {
+      key    = targets.value["key"]
+      values = targets.value["values"]
+    }
+  }
+
+  parameters = {
+    SourceInfo = "s3://${var.name}-ssm/ansible/"
+  }
+
+  output_location {
+    s3_bucket_name = module.s3_bucket.s3_bucket_id
+    s3_key_prefix  = "logs/${aws_ssm_document.ApplyAnsiblePlaybooks.name}"
+  }
+}
+
+# ------------------------------------------------------------------------------
 # SSM Patch Baseline
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 resource "aws_ssm_patch_baseline" "this" {
   name        = var.name
   description = "Patch baseline for ${var.name} instances."
@@ -180,17 +332,17 @@ resource "aws_ssm_patch_baseline" "this" {
   }
 }
 
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # SSM Patch Group
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 resource "aws_ssm_patch_group" "this" {
   baseline_id = aws_ssm_patch_baseline.this.id
   patch_group = var.name
 }
 
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # SSM Maintenance Windows
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 resource "aws_ssm_maintenance_window" "this" {
   name        = var.name
   description = "Maintenance window for ${var.name} instances."
@@ -219,10 +371,13 @@ resource "aws_ssm_maintenance_window_target" "this" {
   }
 }
 
-resource "aws_ssm_maintenance_window_task" "this" {
-  max_concurrency = lookup(var.maintenance_window_task, "max_concurrency")
-  max_errors      = lookup(var.maintenance_window_task, "max_errors")
-  priority        = 1
+resource "aws_ssm_maintenance_window_task" "SystemPatches" {
+  name        = "SystemPatches"
+  description = "Run system patching on patch group instances using the patch baseline configured."
+  priority    = 10
+
+  max_concurrency = var.max_concurrency
+  max_errors      = var.max_errors
   task_arn        = "AWS-RunPatchBaseline"
   task_type       = "RUN_COMMAND"
   window_id       = aws_ssm_maintenance_window.this.id
@@ -234,13 +389,13 @@ resource "aws_ssm_maintenance_window_task" "this" {
 
   task_invocation_parameters {
     run_command_parameters {
-      output_s3_bucket     = "${var.name}-ssm-logs"
-      output_s3_key_prefix = "AWS-RunPatchBaseline"
+      output_s3_bucket     = module.s3_bucket.s3_bucket_id
+      output_s3_key_prefix = "logs/AWS-RunPatchBaseline"
       service_role_arn     = aws_iam_role.this.arn
       timeout_seconds      = 600
 
       cloudwatch_config {
-        cloudwatch_log_group_name = "${var.name}/ssm/AWS-RunPatchBaseline"
+        cloudwatch_log_group_name = aws_cloudwatch_log_group.this.name
         cloudwatch_output_enabled = true
       }
 
@@ -252,6 +407,37 @@ resource "aws_ssm_maintenance_window_task" "this" {
       parameter {
         name   = "RebootOption"
         values = ["RebootIfNeeded"]
+      }
+    }
+  }
+}
+
+resource "aws_ssm_maintenance_window_task" "ApplyAnsiblePlaybooks" {
+  name        = "ApplyAnsiblePlaybooks"
+  description = "Apply configuration and automated tests on application to validate that it is working as expected after patching."
+  priority    = 20
+
+  max_concurrency = var.max_concurrency
+  max_errors      = var.max_errors
+  task_arn        = aws_ssm_document.ApplyAnsiblePlaybooks.name
+  task_type       = "RUN_COMMAND"
+  window_id       = aws_ssm_maintenance_window.this.id
+
+  targets {
+    key    = "WindowTargetIds"
+    values = [aws_ssm_maintenance_window_target.this.id]
+  }
+
+  task_invocation_parameters {
+    run_command_parameters {
+      output_s3_bucket     = module.s3_bucket.s3_bucket_id
+      output_s3_key_prefix = "logs/${aws_ssm_document.ApplyAnsiblePlaybooks.name}"
+      service_role_arn     = aws_iam_role.this.arn
+      timeout_seconds      = 600
+
+      parameter {
+        name   = "SourceInfo"
+        values = ["s3://${var.name}-ssm/ansible/"]
       }
     }
   }

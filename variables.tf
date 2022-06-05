@@ -20,10 +20,23 @@ variable "approved_patches_compliance_level" {
   type        = string
   default     = "UNSPECIFIED"
 }
+
 variable "approved_patches_enable_non_security" {
   description = "(Optional) Indicates whether the list of approved patches includes non-security updates that should be applied to the instances. Applies to Linux instances only."
   type        = bool
   default     = false
+}
+
+variable "max_concurrency" {
+  description = "(Optional) Specify the number of managed nodes that run a command simultaneously. By default uses 10%."
+  type        = string
+  default     = "10%"
+}
+
+variable "max_errors" {
+  description = "(Optional) Specify how many errors are allowed before the system stops sending the command to additional managed nodes. By default uses 1."
+  type        = string
+  default     = "1"
 }
 
 variable "approval_rules" {
@@ -42,19 +55,11 @@ variable "approval_rules" {
 
 variable "maintenance_window" {
   description = "(Required)"
-  type        = object({
+  type = object({
     schedule          = string
     schedule_timezone = string
     cutoff            = number
     duration          = number
     enabled           = bool
-  })
-}
-
-variable "maintenance_window_task" {
-  description = "(Required)"
-  type = object({
-    max_concurrency = number
-    max_errors      = number
   })
 }

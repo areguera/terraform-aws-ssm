@@ -1,0 +1,22 @@
+---
+- name: Install httpd package
+  ansible.builtin.yum:
+    name: httpd
+    state: present
+
+- name: The httpd.service unit is started and enabled at bootup
+  ansible.builtin.service:
+    name: httpd
+    state: started
+    enabled: true
+
+- name: The httpd.service welcome page is commented
+  ansible.builtin.template:
+    src: welcome.conf.j2
+    dest: /etc/httpd/conf.d/welcome.conf
+  notify: reload_httpd
+
+- name: The httpd.service index.html file is present
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: /var/www/html/index.html

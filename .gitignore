@@ -1,5 +1,8 @@
 # Local .terraform directories
 **/.terraform/*
+#
+# Local .terraform.lock.hcl file used for module testing.
+**/.terraform.lock.hcl
 
 # .tfstate files
 *.tfstate

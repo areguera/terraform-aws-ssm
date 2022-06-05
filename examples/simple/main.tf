@@ -15,36 +15,31 @@ provider "aws" {
 # SSM Configuration
 # -------------------------------------------------------------------------------
 module "ssm" {
-  source = "../"
+  source = "../../"
 
   name = var.name
 
   operating_system                     = "AMAZON_LINUX_2"
-  approved_patches_compliance_level    = "UNSPECIFIED"
-  approved_patches_enable_non_security = true
+  approved_patches_compliance_level    = "CRITICAL"
+  approved_patches_enable_non_security = false
 
   approval_rules = [{
     approve_after_days  = 7
-    compliance_level    = "UNSPECIFIED"
-    enable_non_security = true
+    compliance_level    = "CRITICAL"
+    enable_non_security = false
     patch_filters = [
       { key = "PRODUCT", values = ["AmazonLinux2"] },
-      { key = "CLASSIFICATION", values = ["Security", "Bugfix", "Enhancement"] },
-      { key = "SEVERITY", values = ["Critical", "Important", "Medium", "Low"] }
+      { key = "CLASSIFICATION", values = ["Security", "Bugfix"] },
+      { key = "SEVERITY", values = ["Critical", "Important"] }
     ]
   }]
 
   maintenance_window = {
     enabled           = true
-    schedule          = "rate(7 days)"
+    schedule          = "cron(0 9 */7 * ?)"
     schedule_timezone = "UTC"
     cutoff            = 0
     duration          = 1
-  }
-
-  maintenance_window_task = {
-    max_concurrency = 2
-    max_errors      = 1
   }
 }
 

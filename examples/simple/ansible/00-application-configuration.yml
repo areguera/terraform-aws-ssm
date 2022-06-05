@@ -1,0 +1,7 @@
+---
+- name: Examples simple - Configure application
+  hosts: localhost
+  connection: local
+
+  roles:
+    - application-httpd

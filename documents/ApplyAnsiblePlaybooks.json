@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "2.2",
+  "description": "Use this document to run Ansible Playbooks on Systems Manager managed EC2 instances.",
+  "parameters": {
+    "SourceInfo": {
+      "description": "(Required) Specify the remote ansible directory structure (e.g., 's3://${name}-ssm/ansible/'). Playbooks must be organized inside this `ansible' directory using Ansible directory layout best practices (See https://docs.ansible.com/ansible/2.8/user_guide/playbooks_best_practices.html#directory-layout). Important: the IAM instance profile on your managed instances must be configured with read access to Amazon S3.",
+      "type": "String",
+      "displayType": "textfield",
+      "allowedPattern": "^s3://[(a-z_A-Z0-9\\-\\.)\/]+\/$",
+      "default": "s3://${name}-ssm/ansible/"
+    },
+    "TargetInfo": {
+      "description": "(Required) Specify the local ansible directory, in the SSM managed EC2 instances, where remote ansible directory structure will be stored.",
+      "type": "String",
+      "displayType": "textfield",
+      "allowedPattern": "^/[(a-z_A-Z0-9\\-\\.)\/]+\/$",
+      "default": "/opt/${name}-ssm/ansible/"
+    },
+    "ExtraVariables": {
+      "type": "String",
+      "description": "(Optional) Additional variables to pass to Ansible at runtime. Enter key/value pairs separated by a space. For example: color=red flavor=cherry",
+      "default": "SSM=True",
+      "displayType": "textarea",
+      "allowedPattern": "^$|^\\w+\\=(([^\\s|:();&]+)|('[^|:();&]+'))(\\s+\\w+\\=(([^\\s|:();&]+)|('[^|:();&]+')))*$"
+    },
+    "Check": {
+      "type": "String",
+      "description": "(Optional) Use this parameter to run a check of the Ansible execution. The system doesn’t make any changes to your systems. Instead, any module that supports check mode reports the changes it would make rather than making them. Modules that don’t support check mode take no action and don’t report changes that would be made.",
+      "allowedValues": [
+        "True",
+        "False"
+      ],
+      "default": "False"
+    },
+    "Verbose": {
+      "type": "String",
+      "description": "(Optional) Set the verbosity level for logging Playbook executions. Specify -v for low verbosity, -vv or –vvv for medium verbosity, and -vvvv for debug level.",
+      "allowedValues": [
+        "-v",
+        "-vv",
+        "-vvv",
+        "-vvvv"
+      ],
+      "default": "-v"
+    },
+    "TimeoutSeconds": {
+      "type": "String",
+      "description": "(Optional) The time in seconds for a command to be completed before it is considered to have failed.",
+      "default": "3600"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "downloadContent",
+      "inputs": {
+        "timeoutSeconds": "{{TimeoutSeconds}}",
+        "runCommand": [
+          "#!/bin/bash",
+          "if [[ \"{{SourceInfo}}\" =~ /$ ]] ; then",
+          "   aws s3 sync --delete \"{{SourceInfo}}\" \"{{TargetInfo}}\"",
+          "else",
+          "     echo \"The SourceInfo ({{SourceInfo}}) specified doesn't match its naming pattern. You can review the log files to help you correct the problem.\" >&2",
+          "     exit 1",
+          "fi"
+        ]
+      }
+    },
+    {
+      "action": "aws:runShellScript",
+      "name": "runShellScript",
+      "inputs": {
+        "timeoutSeconds": "{{ TimeoutSeconds }}",
+        "runCommand": [
+          "#!/bin/bash",
+          "runAnsiblePlaybook() {",
+          "   local PLAYBOOK=$${1}",
+          "   local PLAYBOOK_EXIT=0",
+          "   if [[ -f \"$${PLAYBOOK}\" ]] ; then",
+          "       if  [[ \"{{Check}}\" == True ]] ; then",
+          "           echo \"Playbook on check mode: $${PLAYBOOK}\"",
+          "           ansible-playbook -i \"localhost,\" --check -c local -e \"{{ExtraVariables}}\" \"{{Verbose}}\" \"$${PLAYBOOK}\"",
+          "           PLAYBOOK_EXIT=$${?}",
+          "       else",
+          "           echo \"Playbook: $${PLAYBOOK}\"",
+          "           ansible-playbook -i \"localhost,\" -c local -e \"{{ExtraVariables}}\" \"{{Verbose}}\" \"$${PLAYBOOK}\"",
+          "           PLAYBOOK_EXIT=$${?}",
+          "       fi",
+          "       if [[ $${PLAYBOOK_EXIT} -ne 0 ]] ; then",
+          "         echo \"Playbook failed: $${PLAYBOOK}. Check the logs.\" >&2",
+          "         exit $${PLAYBOOK_EXIT}",
+          "       fi",
+          "       echo \"--------------------------------------------------------------------------------\"",
+          "   fi",
+          "}",
+          "if [ -f  \"/etc/system-release\" ] ; then",
+          "   if ( cat /etc/system-release | grep -i 'Amazon Linux release 2' ) ; then ",
+          "       [[ ! -x /usr/bin/ansible-playbook ]] && amazon-linux-extras install ansible2 -y",
+          "   else",
+          "       echo \"There was a problem installing or updating the required tools for the document. You can review the log files to help you correct the problem.\" >&2",
+          "       exit 1",
+          "   fi",
+          "else",
+          "   echo \"There was a problem installing or updating the required tools for the document. You can review the log files to help you correct the problem.\" >&2",
+          "   exit 1",
+          "fi",
+          "if [[ -d \"{{TargetInfo}}\" ]] ; then",
+          "   cd {{TargetInfo}}",
+          "   echo \"--------------------------------------------------------------------------------\"",
+          "   echo \"Working directory: $(pwd)\"",
+          "   echo \"User: $(id)\"",
+          "   echo \"--------------------------------------------------------------------------------\"",
+          "   echo \"$(ansible --version)\"",
+          "   echo \"--------------------------------------------------------------------------------\"",
+          "   PLAYBOOKS=$(find . -maxdepth 1 -regextype egrep -regex '.+(.yml|.yaml)$' | sort)",
+          "   for PLAYBOOK in $${PLAYBOOKS};do runAnsiblePlaybook \"$${PLAYBOOK}\"; done",
+          "else",
+          "   echo \"Error executing ansible on directory structure.\"",
+          "   exit 1",
+          "fi"
+        ]
+      }
+    }
+  ]
+}
+
