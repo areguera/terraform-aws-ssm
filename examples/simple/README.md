@@ -16,22 +16,23 @@ This article describes how to setup [AWS Systems Manager (SSM)](https://docs.aws
 	```
 	aws configure
 	```
-6. Initialize terraform provider and modules:
+4. Initialize terraform provider and modules:
 	```
 	terraform init
 	```
-4. Customize SSM configuration to adapt it to your needs:
+5. Customize SSM configuration to adapt it to your needs:
 	* `example/simple/main.tf` --- to customize the patch baseline definition, maintenance window schedule, and auto-scaling group capacity. 
 	* `example/simple/ansible/` --- to customize the EC2 instances desired state.
-5. Check deployment plan:
+6. Check deployment plan:
 	```
 	terraform plan -var name=MyProject -var=us-east-1
 	```
-6. Apply deployment plan:
+7. Apply deployment plan:
 	```
 	terraform apply -var name=MyProject -var=us-east-1
 	```
-Iterate from point 4 to 6.
+
+Iterate between steps 5 and 7.
 
 ## Simple infrastructure desired state
 
