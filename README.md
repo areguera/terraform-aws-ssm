@@ -105,11 +105,19 @@ To know more about associations, see [AWS System Manger State Manager](https://d
 
 ## Documents
 
-This module creates the `${var.name}-ApplyAnsiblePlaybooks` document to
-download ansible playbooks from a private S3 bucket and apply them on SSM
-managed nodes. This document is a modified version of the
+This module creates the `${var.name}-ApplyAnsiblePlaybooks` document that you
+can use to download ansible playbooks from a *private* S3 bucket and apply them
+on SSM managed nodes. This document is a modified version of the
 `AWS-ApplyAnsiblePlaybooks` document, which doesn't support private
 communication with an S3 bucket.
+
+The `${var.name}-ApplyAnsiblePlaybooks` document synchronizes the
+`${path.root}/ansible/` directory structure from S3 to
+`/opt/${var.name}-ssm/ansible` directory, locally, in the SSM managed node file
+system, where the associations or maintenance window tasks are configured to
+run at. Finally, the document creates a list of all playbooks found in the
+first level of `/opt/${var.name}-ssm/ansible` directory, and executes them one
+by one, in alphabetic order, using the ansible-playbook command.
 
 To know more about documents, see [AWS Systems Manager documents](https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-ssm-docs.html) documentation.
 
@@ -117,17 +125,11 @@ To know more about documents, see [AWS Systems Manager documents](https://docs.a
 
 This module implements the desired state of SSM managed nodes using the ansible
 playbooks you provide in the `${path.root}/ansible/` directory. To apply these
-playbooks, the module uploads the `${path.root}/ansible/` directory to a
-private S3 bucket named `${var.name}-ssm` for later use.
-
-For example, an use case may be when you execute associations and maintenance
-window tasks related to `${var.name}-ApplyAnsiblePlaybooks` document. In these
-cases, the document synchronizes the ansible directory structure from S3 to
-`/opt/${var.name}-ssm/ansible` directory, locally, in the SSM managed node
-operating system where the association or maintenance window is configured to
-run at. Finally, with an identical copy of the ansible directory structure in
-the operating system, the document creates a list of playbooks and executes
-them one by one, in alphabetic order, using the ansible-playbook command.
+playbooks on SSM managed nodes, the `terraform-aws-ssm` module deploys a
+private S3 bucket named `${var.name}-ssm`, uploads the `${path.root}/ansible/`
+directory up to it, and uses the `${var.name}-ApplyAnsiblePlaybooks` document
+to apply them, when it is executed from either associations or maintenance
+window tasks.
 
 ## Examples
 
