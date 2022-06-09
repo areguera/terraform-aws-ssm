@@ -80,8 +80,12 @@ which is also seven days. So, that's the moment in time when system patching
 will happen.
 
 This module only supports one maintenance window per module instantiation. To
-create more than one maintenance window, create one new module call for each
-one of them.
+create more than one maintenance window for your infrastructure, create one
+unique configuration for each one of them. Avoid one unique configuration with
+several maintenance windows inside if possible. Having several configurations
+with only one maintenance window allows you to manage different configurations
+easier. For example, in cases where each configuration represents a specific
+level of risk (e.g., dev, stage, prod).
 
 To know more about maintenance window, see [AWS Systems Manager Maintenance Windows](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-maintenance.html) documentation.
 
@@ -101,17 +105,29 @@ To know more about associations, see [AWS System Manger State Manager](https://d
 
 ## Documents
 
-This module creates the `${var.name}-ApplyAnsiblePlaybooks` document. It is a
-modified version of `AWS-ApplyAnsiblePlaybooks` document that allows you to
-apply ansible playbooks using private calls to S3 bucket (e.g., using `s3://`).
+This module creates the `${var.name}-ApplyAnsiblePlaybooks` document to
+download ansible playbooks from a private S3 bucket and apply them on SSM
+managed nodes. This document is a modified version of the
+`AWS-ApplyAnsiblePlaybooks` document, which doesn't support private
+communication with an S3 bucket.
 
 To know more about documents, see [AWS Systems Manager documents](https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-ssm-docs.html) documentation.
 
 ## Desired state
 
-This module implements desired state for SSM managed EC2 instances by using the
-`${var.name}-ApplyAnsiblePlaybooks` document, and ansible playbooks stored in
-the `${path.root}/ansible/` directory.
+This module implements the desired state of SSM managed nodes using the ansible
+playbooks you provide in the `${path.root}/ansible/` directory. To apply these
+playbooks, the module uploads the `${path.root}/ansible/` directory to a
+private S3 bucket named `${var.name}-ssm` for later use.
+
+For example, an use case may be when you execute associations and maintenance
+window tasks related to `${var.name}-ApplyAnsiblePlaybooks` document. In these
+cases, the document synchronizes the ansible directory structure from S3 to
+`/opt/${var.name}-ssm/ansible` directory, locally, in the SSM managed node
+operating system where the association or maintenance window is configured to
+run at. Finally, with an identical copy of the ansible directory structure in
+the operating system, the document creates a list of playbooks and executes
+them one by one, in alphabetic order, using the ansible-playbook command.
 
 ## Examples
 
@@ -169,15 +185,15 @@ the `${path.root}/ansible/` directory.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_approval_rules"></a> [approval\_rules](#input\_approval\_rules) | (Required) A set of rules used to include patches in the baseline. Up to 10 approval rules can be specified. Each approval\_rule block requires the fields documented below. | <pre>list(object({<br>    approve_after_days  = number<br>    compliance_level    = string<br>    enable_non_security = bool<br><br>    patch_filters = list(object({<br>      key    = string<br>      values = list(string)<br>    }))<br>  }))</pre> | n/a | yes |
-| <a name="input_approved_patches_compliance_level"></a> [approved\_patches\_compliance\_level](#input\_approved\_patches\_compliance\_level) | (Optional) Defines the compliance level for approved patches. This means that if an approved patch is reported as missing, this is the severity of the compliance violation. Valid compliance levels include the following: CRITICAL, HIGH, MEDIUM, LOW, INFORMATIONAL, UNSPECIFIED. The default value is UNSPECIFIED. | `string` | `"UNSPECIFIED"` | no |
-| <a name="input_approved_patches_enable_non_security"></a> [approved\_patches\_enable\_non\_security](#input\_approved\_patches\_enable\_non\_security) | (Optional) Indicates whether the list of approved patches includes non-security updates that should be applied to the instances. Applies to Linux instances only. | `bool` | `false` | no |
+| <a name="input_approval_rules"></a> [approval\_rules](#input\_approval\_rules) | (Required) Specify the set of rules used to include patches in the baseline. Up to 10 approval rules can be specified. | <pre>list(object({<br>    approve_after_days  = number<br>    compliance_level    = string<br>    enable_non_security = bool<br>    patch_filters       = list(object({<br>      key    = string<br>      values = list(string)<br>    }))<br>  }))</pre> | n/a | yes |
+| <a name="input_approved_patches_compliance_level"></a> [approved\_patches\_compliance\_level](#input\_approved\_patches\_compliance\_level) | (Optional) Defines the compliance level for approved patches. This means that if an approved patch is reported as missing, this is the severity of the compliance violation. Valid compliance levels include the following: CRITICAL, HIGH, MEDIUM, LOW, INFORMATIONAL, UNSPECIFIED. | `string` | `"UNSPECIFIED"` | no |
+| <a name="input_approved_patches_enable_non_security"></a> [approved\_patches\_enable\_non\_security](#input\_approved\_patches\_enable\_non\_security) | (Optional) Indicates whether the list of approved patches includes non-security updates that should be applied to the instances. | `bool` | `false` | no |
 | <a name="input_description"></a> [description](#input\_description) | (Optional) The project description. | `string` | `""` | no |
-| <a name="input_maintenance_window"></a> [maintenance\_window](#input\_maintenance\_window) | (Required) | <pre>object({<br>    schedule          = string<br>    schedule_timezone = string<br>    cutoff            = number<br>    duration          = number<br>    enabled           = bool<br>  })</pre> | n/a | yes |
-| <a name="input_max_concurrency"></a> [max\_concurrency](#input\_max\_concurrency) | (Optional) Specify the number of managed nodes that run a command simultaneously. By default uses 10%. | `string` | `"10%"` | no |
-| <a name="input_max_errors"></a> [max\_errors](#input\_max\_errors) | (Optional) Specify how many errors are allowed before the system stops sending the command to additional managed nodes. By default uses 1. | `string` | `"1"` | no |
-| <a name="input_name"></a> [name](#input\_name) | (Required) The project name. This value is prefixed to resources. | `string` | n/a | yes |
-| <a name="input_operating_system"></a> [operating\_system](#input\_operating\_system) | (Optional) Defines the operating system the patch baseline applies to. Supported operating systems include WINDOWS, AMAZON\_LINUX, AMAZON\_LINUX\_2, SUSE, UBUNTU, CENTOS, and REDHAT\_ENTERPRISE\_LINUX. The Default value is AMAZON\_LINUX\_2. | `string` | `"AMAZON_LINUX_2"` | no |
+| <a name="input_maintenance_window"></a> [maintenance\_window](#input\_maintenance\_window) | (Required) Specify the set of rules used to configure the maintenance window. | <pre>object({<br>    schedule          = string<br>    schedule_timezone = string<br>    cutoff            = number<br>    duration          = number<br>    enabled           = bool<br>  })</pre> | n/a | yes |
+| <a name="input_max_concurrency"></a> [max\_concurrency](#input\_max\_concurrency) | (Optional) Specify the number of managed nodes that run a command simultaneously. Posible values can be integers (e.g., '5', '10') or percentages (e.g., '10%', '20%'). In both cases the values must be passed as string. | `string` | `"10%"` | no |
+| <a name="input_max_errors"></a> [max\_errors](#input\_max\_errors) | (Optional) Specify how many errors are allowed before the system stops sending the command to additional managed nodes. Posible values can be integers (e.g., '5', '10') or percentages (e.g., '10%', '20%'). In both cases the values must be passed as string. | `string` | `"1"` | no |
+| <a name="input_name"></a> [name](#input\_name) | (Required) The project name. This value is prefixed to SSM configuration resources. | `string` | n/a | yes |
+| <a name="input_operating_system"></a> [operating\_system](#input\_operating\_system) | (Optional) Defines the operating system the patch baseline applies to. Supported operating systems include AMAZON\_LINUX\_2. | `string` | `"AMAZON_LINUX_2"` | no |
 
 ## Outputs
 
