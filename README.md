@@ -89,10 +89,13 @@ To know more about maintenance window, see [AWS Systems Manager Maintenance Wind
 
 This module creates the following associations:
 
-* `${var.name}-UpdateSSMAgent` --- Runs every 14 days. Update SSM agent if new versions are available.
-* `${var.name}-ApplyAnsiblePlaybooks` --- Runs every 30 minutes. Apply ansible playbooks available in `${path.root}/ansible/` directory.
-* `${var.name}-GatherSoftwareInventory` --- Runs every 30 minutes. Collect system information.
-* `${var.name}-RunPatchBaseline` --- Runs every 24 hours. Applies the `${var.name}` patch baseline in Scan mode to identify available patching.
+
+| Name                                  | Recurrency | Description |
+| ------------------------------------- | ---------- | ----------- |
+| `${var.name}-UpdateSSMAgent`          | 14 days    | Update SSM agent when a new version is available. |
+| `${var.name}-ApplyAnsiblePlaybooks`   | 30 minutes | Apply ansible playbooks available in `${path.root}/ansible/` directory. |
+| `${var.name}-GatherSoftwareInventory` | 30 minutes | Collect system information. |
+| `${var.name}-RunPatchBaseline`        | 24 hours   | Applies the `${var.name}` patch baseline in Scan mode to identify available patching. |
 
 To know more about associations, see [AWS System Manger State Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-patch.html) documentation.
 
