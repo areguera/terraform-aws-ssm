@@ -12,15 +12,9 @@
   },
   "homepage": "https://github.com/areguera/terraform-aws-ssm#readme",
   "devDependencies": {
-    "@semantic-release/github": "^8.0.4",
     "git-cz": "^4.9.0",
     "semantic-release": "^19.0.3"
   },
-  "plugins": [
-    "@semantic-release/commit-analyzer",
-    "@semantic-release/release-notes-generator",
-    "@semantic-release/github"
-  ],
   "config": {
     "commitizen": {
       "path": "git-cz"
