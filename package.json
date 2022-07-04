@@ -1,0 +1,23 @@
+{
+  "name": "terraform-aws-ssm",
+  "description": "Terraform module to compose AWS Systems Manager (SSM) configurations.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/areguera/terraform-aws-ssm.git"
+  },
+  "author": "Alain Reguera Delgado",
+  "license": "Apache License 2.0",
+  "bugs": {
+    "url": "https://github.com/areguera/terraform-aws-ssm/issues"
+  },
+  "homepage": "https://github.com/areguera/terraform-aws-ssm#readme",
+  "devDependencies": {
+    "git-cz": "^4.9.0",
+    "semantic-release": "^19.0.3"
+  },
+  "config": {
+    "commitizen": {
+      "path": "git-cz"
+    }
+  }
+}
