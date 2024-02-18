@@ -12,7 +12,6 @@
   },
   "homepage": "https://github.com/areguera/terraform-aws-ssm#readme",
   "devDependencies": {
-    "commitizen": "^4.2.5",
     "@semantic-release/github": "^8.0.4",
     "semantic-release": "^19.0.3"
   },
@@ -27,10 +26,5 @@
     "@semantic-release/release-notes-generator",
     "@semantic-release/github",
     "@semantic-release/npm"
-  ],
-  "config": {
-    "commitizen": {
-      "path": "cz-conventional-changelog"
-    }
-  }
+  ]
 }
