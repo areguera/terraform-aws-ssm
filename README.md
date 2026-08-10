@@ -1,3 +1,5 @@
+
+
 # terraform-aws-ssm
 
 Terraform module to compose [AWS Systems Manager (SSM)](https://docs.aws.amazon.com/systems-manager/latest/userguide/what-is-systems-manager.html) configurations.
@@ -101,7 +103,7 @@ This module creates the following associations:
 | `${var.name}-GatherSoftwareInventory` | 30 minutes | Collect system information. |
 | `${var.name}-RunPatchBaseline`        | 24 hours   | Applies the `${var.name}` patch baseline in Scan mode to identify available patching. |
 
-To know more about associations, see [AWS System Manger State Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-patch.html) documentation.
+To know more about associations, see [AWS Systems Manager State Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-state-manager.html) documentation.
 
 ## Documents
 
