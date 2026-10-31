@@ -84,7 +84,10 @@ resource "aws_iam_policy" "AmazonEC2SSMCloudwatch" {
           "logs:DescribeLogStreams",
           "logs:PutLogEvents"
         ],
-        "Resource" : "${aws_cloudwatch_log_group.this.arn}:*"
+        "Resource" : [
+          aws_cloudwatch_log_group.this.arn,
+          "${aws_cloudwatch_log_group.this.arn}:*"
+        ]
       }
     ]
   })
